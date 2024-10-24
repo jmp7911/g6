@@ -1,11 +1,15 @@
-from fastapi import APIRouter, Depends, Form, Query
-from sqlalchemy import extract, select, cast, String
+import re
+from datetime import datetime
+from typing import List
+
+from fastapi import APIRouter, Depends, Form, Query, Request
+from sqlalchemy import asc, cast, delete, desc, extract, func, select, String
 
 from core.database import db_session
 from core.exception import AlertException
+from core.models import Visit
 from core.template import AdminTemplates
-from lib.common import *
-from lib.dependencies import validate_super_admin, validate_token
+from lib.dependency.dependencies import validate_super_admin, validate_token
 from lib.pbkdf2 import validate_password
 from lib.template_functions import get_paging
 
@@ -657,7 +661,7 @@ def count_by_field(list: list, field_name: str) -> list:
     return [{field_name: key, "count": value} for key, value in temp.items()]
 
 
-def add_percent_field(list: [dict]) -> list:
+def add_percent_field(list: List[dict]) -> list:
     """기존 리스트에 백분율을 계산하여 percent 필드를 추가합니다.
     Args:
         list (list): 접속자 리스트 (count 필드가 있어야 함)
@@ -678,15 +682,14 @@ def get_browser(user_agent):
     user_agent = user_agent.lower()
 
     browsers = {
-        'MSIE': r"msie ([1-9][0-9]\.[0-9]+)",
-        'FireFox': r"firefox",
         'Chrome': r"chrome",
-        'Netscape': r"x11",
+        'FireFox': r"firefox",
+        'Safari': r"safari",
         'Opera': r"opera",
-        'Gecko': r"gec",
-        'Robot': r"bot|slurp",
-        'IE': r"internet explorer",
-        'Mozilla': r"mozilla"
+        'MSIE': r"msie ([1-9][0-9]\.[0-9]+)",
+        'Mozilla': r"mozilla",
+        'Robot': r"bot|Yeti|Baidu|Daumoa|Yandex|slurp|facebook",
+        'IE': r"internet explorer"
     }
 
     for browser_name, pattern in browsers.items():
@@ -700,6 +703,10 @@ def get_os(user_agent):
     user_agent = user_agent.lower()
 
     os_patterns = {
+        "Android": r"android",
+        "IOS": r"IOS",
+        "iPad OS": r"iPad",
+        "Phone": r"phone",
         "Windows10": r"windows nt 10\.0",
         "Windows8.1": r"windows nt 6\.3",
         "Windows8": r"windows nt 6\.2",
@@ -708,14 +715,11 @@ def get_os(user_agent):
         "XP": r"windows nt 5\.1",
         "2003": r"windows nt 5\.2",
         "NT": r"windows nt 4\.[0-9]*",
-        "ME": r"windows 9x",
         "CE": r"windows ce",
         "MAC": r"mac",
-        "Android": r"android",
-        "Phone": r"phone",
-        "Robot": r"bot|Yeti|Baidu|Daumoa|Yandex|slurp",
+        "Robot": r"bot|Yeti|Baidu|Daumoa|Yandex|slurp|facebook ",
         "Linux": r"linux",
-        "sunOS": r"sunos",
+        "Solrais": r"solrais",
         "IE": r"internet explorer",
         "Mozilla": r"mozilla",
         "IRIX": r"irix"

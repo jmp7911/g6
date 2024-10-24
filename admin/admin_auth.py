@@ -2,16 +2,18 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from core.database import db_session
 from core.exception import AlertException
 from core.models import Auth, Member
+from core.plugin import get_all_plugin_admin_menu_id_name
 from core.template import AdminTemplates
-from lib.dependencies import (
+from lib.captcha import captcha_widget
+from lib.common import get_admin_menus, select_query, set_url_query_params
+from lib.dependency.dependencies import (
     common_search_query_params, validate_token, validate_captcha
 )
-from lib.common import *
 from lib.template_functions import get_paging
 
 router = APIRouter()
@@ -34,6 +36,7 @@ async def auth_list(
 
     result = select_query(
         request,
+        db,
         Auth,
         search_params,
         same_search_fields=["mb_id"],
@@ -56,12 +59,18 @@ async def auth_list(
         row.mb_nick = row.member.mb_nick
         row.au_name = auth_child_menu.get(row.au_menu, '')
 
+    # auth_child_menu 키값으로 정렬
+    auth_child_menu = dict(sorted(auth_child_menu.items()))
+
     # 권한 옵션 생성
     auth_options = []
     for id, name in auth_child_menu.items():
         # id와 name 값이 비어 있지 않은 경우 그들을 옵션으로 출력
         if id and name and id[-3:] != '000':
             auth_options.append(f'<option value="{id}">{id} {name}</option>')
+
+    for id, name in get_all_plugin_admin_menu_id_name():
+        auth_options.append(f'<option value="{id}">{id} {name}</option>')
 
     context = {
         "request": request,

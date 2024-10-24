@@ -1,6 +1,7 @@
 # 플러그인을 관리하는 메뉴
 # 플러그인을 활성/비활성하고 플러그인의 신규 플러그인을 등록한다.
 import logging
+import os
 
 from fastapi import APIRouter, Depends
 from fastapi import HTTPException
@@ -8,15 +9,16 @@ from fastapi.params import Form
 from starlette.requests import Request
 from starlette.responses import JSONResponse, FileResponse
 
-from admin.admin import templates
+from core.template import AdminTemplates
 from core.plugin import (
     get_plugin_info, get_all_plugin_info, PLUGIN_DIR,
     PluginState, read_plugin_state, write_plugin_state
 )
-from lib.dependencies import validate_super_admin
+from lib.dependency.dependencies import validate_super_admin
 
 logging.basicConfig(level=logging.INFO)
 router = APIRouter(dependencies=[Depends(validate_super_admin)])
+templates = AdminTemplates()
 
 
 @router.post("/plugin_detail")
@@ -112,10 +114,15 @@ async def update_plugin_state(
 @router.get("/plugin/screenshot/{module_name}")
 async def show_screenshot(module_name: str):
     try:
-        file_path = f"{PLUGIN_DIR}/{module_name}/screenshot.png"
+        file_path = f"{PLUGIN_DIR}/{module_name}/screenshot.webp"
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
 
-        return FileResponse(file_path)
+        file_path = f"{PLUGIN_DIR}/{module_name}/screenshot.png"
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
+
+        raise FileNotFoundError
     except Exception as e:
         logging.error(f"An error occurred while serving the file: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+        raise HTTPException(status_code=400, detail=str(e))

@@ -5,7 +5,7 @@
 
 {% block content %}
 <section>
-    <h2>신규가입회원 {{ new_member_rows }}건 목록</h2>
+    <h2>신규가입회원 {{ new_members|length }}건 목록</h2>
     <div class="local_desc02 local_desc">
         총회원수 {{ total_member_count|number_format }}명 중 차단 {{ intercept_count|number_format }}명, 탈퇴 : {{ leave_count|number_format }}명
     </div>
@@ -34,7 +34,7 @@
                     <td class="td_mbid">{{ member.mb_id }}</td>
                     <td class="td_mbname">{{ member.mb_name }}</td>
                     <td class="td_mbname sv_use">
-                        <div>{{ sideview.get(request, member.mb_id, member.mb_nick, member.wr_email, member.wr_homepage)|safe }}</div>
+                        <div>{{ sideview.get(request, member.mb_id, member.mb_nick, member.mb_email, member.mb_homepage)|safe }}</div>
                     </td>
                     <td class="td_num">{{ member.mb_level }}</td>
                     <td><a href="/admin/point_list?sfl=mb_id&stx={{ member.mb_id }}">{{ member.mb_point|number_format }}</a></td>
@@ -115,7 +115,7 @@
 <section>
     <h2>최근 포인트 발생내역</h2>
     <div class="local_desc02 local_desc">
-        전체 {{ total_point_count|number_format }}건 중 {{ new_point_rows }}건 목록
+        전체 {{ total_point_count|number_format }}건 중 {{ new_points|length }}건 목록
     </div>
 
     <div class="tbl_head01 tbl_wrap">
@@ -138,7 +138,7 @@
                     <td class="td_mbid"><a href="/admin/point_list?sfl=mb_id&stx={{ row.mb_id }}">{{ row.mb_id }}</a></td>
                     <td class="td_mbname">{{ row.member.mb_name }}</td>
                     <td class="td_name sv_use">
-                        <div>{{ sideview.get(request, row.member.mb_id, row.member.mb_nick, row.member.wr_email, row.member.wr_homepage)|safe }}</div>
+                        <div>{{ sideview.get(request, row.member.mb_id, row.member.mb_nick, row.member.mb_email, row.member.mb_homepage)|safe }}</div>
                     </td>
                     <td class="td_datetime">{{ row.po_datetime.strftime('%Y-%m-%d') }}</td>
                     <td><a href="{{ row.link }}">{{ row.po_content }}</a></td>

@@ -1,11 +1,12 @@
-
+"""예외처리 Core 모듈"""
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.templating import _TemplateResponse
 
-from core.template import TemplateService, theme_asset
+from slowapi.errors import RateLimitExceeded
 
 
 class AlertException(HTTPException):
@@ -29,6 +30,36 @@ class AlertCloseException(HTTPException):
         headers: Optional[Dict[str, str]] = None,
     ) -> None:
         super().__init__(status_code=status_code, detail=detail, headers=headers)
+
+
+class JSONException(Exception):
+    """HTTPException의 'detail' 키 대신 'message'를 키로 사용하기 위한 예외 클래스"""
+    def __init__(self, status_code: int, message: str, **kwargs):
+        self.status_code = status_code
+        self.message = message
+        self.kwargs = kwargs
+
+
+# 템플릿 미사용 시 예외처리 핸들러 등록
+class TemplateDisabledException(HTTPException):
+    """템플릿 사용 불가 예외 클래스"""
+
+    def __init__(
+        self,
+        detail: Any = None,
+        status_code: int = 200,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> None:
+        super().__init__(status_code=status_code, detail=detail, headers=headers)
+        self.status_code = status_code
+        self.detail = detail
+
+
+class RedirectException(HTTPException):
+    """특정 url로 redirect를 위한 예외 클래스"""
+    def __init__(self, status_code: int, url: str):
+        self.status_code = status_code
+        self.url = url
 
 
 def regist_core_exception_handler(app: FastAPI) -> None:
@@ -55,6 +86,40 @@ def regist_core_exception_handler(app: FastAPI) -> None:
         }
         return template_response("alert_close.html", context, exc.status_code)
 
+    @app.exception_handler(TemplateDisabledException)
+    async def template_disabled_exception_handler(
+            request: Request, exc: TemplateDisabledException):
+        """템플릿 사용 불가 예외처리 handler 등록"""
+        context = {
+            "request": request,
+            "errors": exc.detail
+        }
+        return template_response("503.html", context, exc.status_code)
+
+    @app.exception_handler(JSONException)
+    async def json_exception_handler(request: Request, exc: JSONException):
+        """JSONException 예외처리 handler 등록"""
+        content = {"message": exc.message}
+        content.update(exc.kwargs)
+
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=content
+        )
+
+    @app.exception_handler(RedirectException)
+    async def redirect_exception_handler(request: Request, exc: RedirectException):
+        """RedirectException 예외처리 handler 등록"""
+        return RedirectResponse(url=exc.url, status_code=exc.status_code)
+
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded):
+        """RateLimitExceeded 예외처리 handler 등록"""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"message": exc.detail}
+        )
+
 
 def template_response(
         template_html: str,
@@ -70,6 +135,8 @@ def template_response(
     Returns:
         _TemplateResponse: 템플릿 응답 객체
     """
+    from core.template import TemplateService, theme_asset
+
     # 새로운 템플릿 응답 객체를 생성합니다.
     # - UserTemplates, AdminTemplates 클래스는 기본 컨텍스트 설정 시 DB를 조회하는데,
     #   처음 설치 시에는 DB가 없으므로 새로운 템플릿 응답 객체를 생성합니다.

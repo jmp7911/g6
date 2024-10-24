@@ -1,17 +1,20 @@
+"""테마 관리 Template Router"""
+import logging
+import os.path
 from typing_extensions import Annotated
 
 from jinja2 import FileSystemLoader
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from fastapi.responses import FileResponse
 from sqlalchemy import select, update
 
 from core.database import db_session
+from core.models import Config
 from core.template import (
     AdminTemplates, TEMPLATES, TemplateService, UserTemplates,
     get_current_theme, get_theme_list, get_theme_info, register_theme_statics,
 )
-from lib.common import *
-from lib.dependencies import validate_super_admin, validate_theme
+from lib.dependency.dependencies import validate_super_admin, validate_theme
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -85,35 +88,41 @@ async def theme_preview(
 
 @router.post("/theme_update")
 async def theme_update(
-    request: Request,
     db: db_session,
-    theme: Annotated[str, Depends(validate_theme)]
+    select_theme: Annotated[str, Depends(validate_theme)]
 ):
     """ 테마 적용 """
+    from main import app  # 순환참조 방지
+
     before_theme = get_current_theme()
     before_theme_path = f"{TEMPLATES}/{before_theme}"
 
-    info = get_theme_info(theme)
-
-    db.execute(update(Config).values(cf_theme=theme))
+    db.execute(update(Config).values(cf_theme=select_theme))
     db.commit()
 
-    from main import app  # 순환참조 방지
+    # 선택한 테마로 캐시&설정 데이터들을 갱신합니다.
+    get_current_theme.cache_clear()
+    TemplateService.set_templates_dir()
+    cache_directory = "data/cache"
+    for filename in os.listdir(cache_directory):
+        if filename.startswith("latest-"):
+            file_path = os.path.join(cache_directory, filename)
+            os.unlink(file_path)
 
-    # todo 미들웨어로 옮기기
+    # 테마 관련 정적 파일을 등록합니다.
     register_theme_statics(app)
-    user_template = UserTemplates()
-    current_theme_path: list = user_template.default_directories
 
     # 이전 테마 경로를 제거 후 새로운 테마 경로를 추가합니다.
+    user_template = UserTemplates()
+    current_theme_path: list = user_template.default_directories
     theme_path = [path for path in current_theme_path if not path.startswith(before_theme_path)]
-    theme_path.insert(0, f"{TEMPLATES}/{theme}")
+    theme_path.insert(0, f"{TEMPLATES}/{select_theme}")
 
     user_template.default_directories = theme_path
     user_template.env.loader = FileSystemLoader(theme_path)
 
-    # 현재 테마의 경로를 변경합니다.
-    TemplateService.set_templates_dir()
+    # 현재 테마 정보를 가져옵니다.
+    info = get_theme_info(select_theme)
 
     return {"success": f"{info['theme_name']} 테마로 변경되었습니다."}
 
@@ -121,13 +130,16 @@ async def theme_update(
 @router.get("/screenshot/{theme}")
 async def screenshot(theme: str = Path(...)):
     try:
+        file_path = f"{TEMPLATES}/{theme}/screenshot.webp"
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
+
         file_path = f"{TEMPLATES}/{theme}/screenshot.png"
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
 
-        if not os.path.exists(file_path):
-            logger.error(f"File not found: {file_path}")
-            raise HTTPException(status_code=404, detail="File not found")
-
-        return FileResponse(file_path)
+        logger.error(f"File not found: {file_path}")
+        raise HTTPException(status_code=404, detail="File not found")
     except Exception as e:
         logger.error(f"An error occurred while serving the file: {e}")
         raise HTTPException(status_code=500, detail=str(e))

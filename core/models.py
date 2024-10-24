@@ -1,10 +1,14 @@
-from sqlalchemy import Column, Integer, String, Text, Enum, ForeignKey, Index, text, DateTime, Date, Time, Boolean, BIGINT, UniqueConstraint
+from datetime import datetime, date
 from typing import List
 
 # TINYINT 대신 Integer 사용하기 바랍니다.
 # from sqlalchemy.dialects.mysql import TINYINT
+from sqlalchemy import (
+    BIGINT, Column, Date, DateTime, Enum, ForeignKey, func, Index, Integer,
+    String, Text, Time, text, UniqueConstraint
+)
 from sqlalchemy.orm import DynamicMapped, Mapped, relationship, declarative_base
-from datetime import datetime, date
+
 from core.database import DBConnect, MySQLCharsetMixin
 
 Base = declarative_base(cls=MySQLCharsetMixin)
@@ -16,7 +20,6 @@ class Config(Base):
     """
     환경설정 테이블
     """
-
     __tablename__ = DB_TABLE_PREFIX + "config"
 
     cf_id = Column(Integer, primary_key=True)
@@ -180,7 +183,6 @@ class Member(Base):
     """
     회원 테이블
     """
-
     __tablename__ = DB_TABLE_PREFIX + "member"
 
     mb_no = Column(Integer, primary_key=True)
@@ -210,7 +212,7 @@ class Member(Base):
     mb_point = Column(Integer, nullable=False, default=0, server_default=text("0"))
     mb_today_login = Column(DateTime, nullable=False, default=datetime(1, 1, 1, 0, 0, 0))
     mb_login_ip = Column(String(255), nullable=False, default="")
-    mb_datetime = Column(DateTime, nullable=False, default=datetime(1, 1, 1, 0, 0, 0))
+    mb_datetime = Column(DateTime, nullable=False, default=func.now())
     mb_ip = Column(String(255), nullable=False, default="")
     mb_leave_date = Column(String(8), nullable=False, default="")
     mb_intercept_date = Column(String(8), nullable=False, default="")
@@ -239,22 +241,77 @@ class Member(Base):
 
     auths: Mapped[List["Auth"]] = relationship("Auth", back_populates="member")
     groups: Mapped[List["GroupMember"]] = relationship(back_populates="member")
-    points: Mapped[List["Point"]] = relationship("Point", back_populates="member")
+    points: DynamicMapped["Point"] = relationship("Point", back_populates="member", lazy="dynamic")
     socials: Mapped[List["MemberSocialProfiles"]] = relationship("MemberSocialProfiles", back_populates="member")
-    recv_memos: Mapped[List["Memo"]] = relationship("Memo", back_populates="recv_member", foreign_keys="Memo.me_recv_mb_id")
-    send_memos: Mapped[List["Memo"]] = relationship("Memo", back_populates="send_member", foreign_keys="Memo.me_send_mb_id")
+    recv_memos: DynamicMapped["Memo"] = relationship("Memo", back_populates="recv_member", lazy="dynamic", foreign_keys="Memo.me_recv_mb_id")
+    send_memos: DynamicMapped["Memo"] = relationship("Memo", back_populates="send_member", lazy="dynamic", foreign_keys="Memo.me_send_mb_id")
     scraps: DynamicMapped["Scrap"] = relationship("Scrap", back_populates="member", lazy="dynamic")
+
+
+class Group(Base):
+    """
+    게시판 그룹 테이블
+    """
+    __tablename__ = DB_TABLE_PREFIX + "group"
+
+    gr_id = Column(String(10), primary_key=True, nullable=False)
+    gr_subject = Column(String(255), nullable=False, default="")
+    gr_device = Column(Enum("both", "pc", "mobile", name="gr_device"), nullable=False, default="both")
+    gr_admin = Column(String(255), nullable=False, default="")
+    gr_use_access = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    gr_order = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    gr_1_subj = Column(String(255), nullable=False, default="")
+    gr_2_subj = Column(String(255), nullable=False, default="")
+    gr_3_subj = Column(String(255), nullable=False, default="")
+    gr_4_subj = Column(String(255), nullable=False, default="")
+    gr_5_subj = Column(String(255), nullable=False, default="")
+    gr_6_subj = Column(String(255), nullable=False, default="")
+    gr_7_subj = Column(String(255), nullable=False, default="")
+    gr_8_subj = Column(String(255), nullable=False, default="")
+    gr_9_subj = Column(String(255), nullable=False, default="")
+    gr_10_subj = Column(String(255), nullable=False, default="")
+    gr_1 = Column(String(255), nullable=False, default="")
+    gr_2 = Column(String(255), nullable=False, default="")
+    gr_3 = Column(String(255), nullable=False, default="")
+    gr_4 = Column(String(255), nullable=False, default="")
+    gr_5 = Column(String(255), nullable=False, default="")
+    gr_6 = Column(String(255), nullable=False, default="")
+    gr_7 = Column(String(255), nullable=False, default="")
+    gr_8 = Column(String(255), nullable=False, default="")
+    gr_9 = Column(String(255), nullable=False, default="")
+    gr_10 = Column(String(255), nullable=False, default="")
+
+    # 연관관계
+    boards: Mapped[List["Board"]] = relationship(back_populates="group")
+    members: Mapped[List["GroupMember"]] = relationship(back_populates="group")
+
+
+class GroupMember(Base):
+    """
+    그룹회원 테이블
+    """
+    __tablename__ = DB_TABLE_PREFIX + "group_member"
+
+    gm_id = Column(Integer, primary_key=True, autoincrement=True)
+    gr_id = Column(String(10), ForeignKey(Group.gr_id), nullable=False, default="")
+    mb_id = Column(String(20), ForeignKey(Member.mb_id), nullable=False, default="")
+    gm_datetime = Column(DateTime, nullable=False, default=datetime(1, 1, 1, 0, 0, 0))
+
+    gr_id_index = Index("gr_id", gr_id)
+    mb_id_index = Index("mb_id", mb_id)
+
+    member: Mapped["Member"] = relationship(back_populates="groups")
+    group: Mapped["Group"] = relationship(back_populates="members")
 
 
 class Board(Base):
     """
     게시판 설정 테이블
     """
-
     __tablename__ = DB_TABLE_PREFIX + "board"
 
     bo_table = Column(String(20), primary_key=True, nullable=False)
-    gr_id = Column(String(255), ForeignKey(DB_TABLE_PREFIX + "group.gr_id"), nullable=False, default="")
+    gr_id = Column(String(255), ForeignKey(Group.gr_id), nullable=False, default="")
     bo_subject = Column(String(255), nullable=False, default="")
     bo_mobile_subject = Column(String(255), nullable=False, default="")
     bo_device = Column(Enum("both", "pc", "mobile", name="bo_device"), nullable=False, default="both")
@@ -360,7 +417,6 @@ class WriteBaseModel(Base):
     게시글, 댓글 테이블
     wr_is_comment : 0=글, 1=댓글
     """
-
     # __tablename__ = DB_TABLE_PREFIX + 'write'
     __abstract__ = True
 
@@ -427,68 +483,10 @@ class WriteBaseModel(Base):
 # Index('idx_write_bo_table_wr_id', WriteBaseModel.bo_table, WriteBaseModel.wr_id)
 
 
-class Group(Base):
-    """
-    게시판 그룹 테이블
-    """
-
-    __tablename__ = DB_TABLE_PREFIX + "group"
-
-    gr_id = Column(String(10), primary_key=True, nullable=False)
-    gr_subject = Column(String(255), nullable=False, default="")
-    gr_device = Column(Enum("both", "pc", "mobile", name="gr_device"), nullable=False, default="both")
-    gr_admin = Column(String(255), nullable=False, default="")
-    gr_use_access = Column(Integer, nullable=False, default=0, server_default=text("0"))
-    gr_order = Column(Integer, nullable=False, default=0, server_default=text("0"))
-    gr_1_subj = Column(String(255), nullable=False, default="")
-    gr_2_subj = Column(String(255), nullable=False, default="")
-    gr_3_subj = Column(String(255), nullable=False, default="")
-    gr_4_subj = Column(String(255), nullable=False, default="")
-    gr_5_subj = Column(String(255), nullable=False, default="")
-    gr_6_subj = Column(String(255), nullable=False, default="")
-    gr_7_subj = Column(String(255), nullable=False, default="")
-    gr_8_subj = Column(String(255), nullable=False, default="")
-    gr_9_subj = Column(String(255), nullable=False, default="")
-    gr_10_subj = Column(String(255), nullable=False, default="")
-    gr_1 = Column(String(255), nullable=False, default="")
-    gr_2 = Column(String(255), nullable=False, default="")
-    gr_3 = Column(String(255), nullable=False, default="")
-    gr_4 = Column(String(255), nullable=False, default="")
-    gr_5 = Column(String(255), nullable=False, default="")
-    gr_6 = Column(String(255), nullable=False, default="")
-    gr_7 = Column(String(255), nullable=False, default="")
-    gr_8 = Column(String(255), nullable=False, default="")
-    gr_9 = Column(String(255), nullable=False, default="")
-    gr_10 = Column(String(255), nullable=False, default="")
-    # 종속관계
-
-    boards: Mapped[List["Board"]] = relationship(back_populates="group")
-    members: Mapped[List["GroupMember"]] = relationship(back_populates="group")
-
-
-class GroupMember(Base):
-    '''
-    그룹회원 테이블
-    '''    
-    __tablename__ = DB_TABLE_PREFIX + "group_member"
-
-    gm_id = Column(Integer, primary_key=True, autoincrement=True)
-    gr_id = Column(String(10), ForeignKey(DB_TABLE_PREFIX + "group.gr_id"), nullable=False, default="")
-    mb_id = Column(String(20), ForeignKey(DB_TABLE_PREFIX + "member.mb_id"), nullable=False, default="")
-    gm_datetime = Column(DateTime, nullable=False, default=datetime(1, 1, 1, 0, 0, 0))
-
-    gr_id_index = Index("gr_id", gr_id)
-    mb_id_index = Index("mb_id", mb_id)
-
-    member: Mapped["Member"] = relationship(back_populates="groups")
-    group: Mapped["Group"] = relationship(back_populates="members")
-
-
 class Content(Base):
     """
     내용 테이블
     """
-
     __tablename__ = DB_TABLE_PREFIX + "content"
 
     co_id = Column(String(20), primary_key=True, nullable=False, default="")
@@ -506,6 +504,9 @@ class Content(Base):
 
 
 class FaqMaster(Base):
+    """
+    FAQ 분류 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "faq_master"
 
     fm_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -517,30 +518,33 @@ class FaqMaster(Base):
     fm_order = Column(Integer, nullable=False, default=0)
 
     # 연관관계
-    faqs = relationship(
-        "Faq", back_populates="faq_master", cascade="all, delete-orphan"
+    related_faqs: DynamicMapped[List["Faq"]] = relationship(
+        "Faq", back_populates="faq_master", lazy="dynamic", cascade="all, delete-orphan"
     )
 
 
 class Faq(Base):
+    """
+    FAQ 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "faq"
 
     fa_id = Column(Integer, primary_key=True, autoincrement=True)
-    fm_id = Column(
-        Integer,
-        ForeignKey(DB_TABLE_PREFIX + "faq_master.fm_id"),
-        nullable=False,
-        default=0,
-    )
+    fm_id = Column(Integer, ForeignKey(FaqMaster.fm_id), nullable=False, default=0)
     fa_subject = Column(Text, nullable=False, default="")
     fa_content = Column(Text, nullable=False, default="")
     fa_order = Column(Integer, nullable=False, default=0)
 
     # 연관관계
-    faq_master = relationship("FaqMaster", back_populates="faqs", foreign_keys=[fm_id])
+    faq_master: Mapped["FaqMaster"] = relationship(
+        "FaqMaster", back_populates="related_faqs", foreign_keys=[fm_id]
+    )
 
 
 class Visit(Base):
+    """
+    방문자 이력 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "visit"
 
     vi_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -555,6 +559,9 @@ class Visit(Base):
 
 
 class VisitSum(Base):
+    """
+    방문자 수 통계 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "visit_sum"
 
     vs_date = Column(Date, primary_key=True, nullable=False, default="")
@@ -562,8 +569,9 @@ class VisitSum(Base):
 
 
 class QaConfig(Base):
-    """Q&A 설정 테이블"""
-
+    """
+    Q&A 설정 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "qa_config"
 
     id = Column(Integer, primary_key=True)
@@ -586,40 +594,36 @@ class QaConfig(Base):
     qa_mobile_page_rows = Column(Integer, nullable=False, default=0)
     qa_image_width = Column(Integer, nullable=False, default=0)
     qa_upload_size = Column(Integer, nullable=False, default=0)
-    qa_insert_content = Column(Text, nullable=True)
-    qa_include_head = Column(String(255), nullable=True)
-    qa_include_tail = Column(String(255), nullable=True)
-    qa_content_head = Column(Text, nullable=True)
-    qa_content_tail = Column(Text, nullable=True)
-    qa_mobile_content_head = Column(Text, nullable=True)
-    qa_mobile_content_tail = Column(Text, nullable=True)
-    qa_1_subj = Column(String(255), nullable=True)
-    qa_2_subj = Column(String(255), nullable=True)
-    qa_3_subj = Column(String(255), nullable=True)
-    qa_4_subj = Column(String(255), nullable=True)
-    qa_5_subj = Column(String(255), nullable=True)
-    qa_1 = Column(String(255), nullable=True)
-    qa_2 = Column(String(255), nullable=True)
-    qa_3 = Column(String(255), nullable=True)
-    qa_4 = Column(String(255), nullable=True)
-    qa_5 = Column(String(255), nullable=True)
+    qa_insert_content = Column(Text, nullable=False, default="")
+    qa_include_head = Column(String(255), nullable=False, default="")
+    qa_include_tail = Column(String(255), nullable=False, default="")
+    qa_content_head = Column(Text, nullable=False, default="")
+    qa_content_tail = Column(Text, nullable=False, default="")
+    qa_mobile_content_head = Column(Text, nullable=False, default="")
+    qa_mobile_content_tail = Column(Text, nullable=False, default="")
+    qa_1_subj = Column(String(255), nullable=False, default="")
+    qa_2_subj = Column(String(255), nullable=False, default="")
+    qa_3_subj = Column(String(255), nullable=False, default="")
+    qa_4_subj = Column(String(255), nullable=False, default="")
+    qa_5_subj = Column(String(255), nullable=False, default="")
+    qa_1 = Column(String(255), nullable=False, default="")
+    qa_2 = Column(String(255), nullable=False, default="")
+    qa_3 = Column(String(255), nullable=False, default="")
+    qa_4 = Column(String(255), nullable=False, default="")
+    qa_5 = Column(String(255), nullable=False, default="")
 
 
 class QaContent(Base):
-    """Q&A 데이터 테이블"""
-
+    """
+    Q&A 데이터 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "qa_content"
 
     qa_id = Column(Integer, primary_key=True, autoincrement=True)
     qa_num = Column(Integer, nullable=False, default=0)
     qa_parent = Column(Integer, nullable=False, default=0)
     qa_related = Column(Integer, nullable=False, default=0)
-    mb_id = Column(
-        String(20),
-        ForeignKey(DB_TABLE_PREFIX + "member.mb_id"),
-        nullable=False,
-        default="",
-    )
+    mb_id = Column(String(20), ForeignKey(Member.mb_id), nullable=False, default="")
     qa_name = Column(String(255), nullable=False, default="")
     qa_email = Column(String(255), nullable=False, default="")
     qa_hp = Column(String(255), nullable=False, default="")
@@ -636,18 +640,21 @@ class QaContent(Base):
     qa_file2 = Column(String(255), nullable=False, default="")
     qa_source2 = Column(String(255), nullable=False, default="")
     qa_ip = Column(String(255), nullable=False, default="")
-    qa_datetime = Column(DateTime, nullable=False, default=datetime(1, 1, 1, 0, 0, 0))
+    qa_datetime = Column(DateTime, nullable=False, default=func.now())
     qa_1 = Column(String(255), nullable=False, default="")
     qa_2 = Column(String(255), nullable=False, default="")
     qa_3 = Column(String(255), nullable=False, default="")
     qa_4 = Column(String(255), nullable=False, default="")
     qa_5 = Column(String(255), nullable=False, default="")
 
-    # Index 추가
+    # Index
     qa_num_parent_index = Index("qa_num_parent", qa_num, qa_parent)
 
 
 class Menu(Base):
+    """
+    사용자페이지 메뉴 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "menu"
 
     me_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -664,23 +671,23 @@ class Point(Base):
     """
     포인트 테이블
     """
-
     __tablename__ = DB_TABLE_PREFIX + "point"
 
     po_id = Column(Integer, primary_key=True, autoincrement=True)
-    mb_id = Column(String(20), ForeignKey(DB_TABLE_PREFIX + "member.mb_id"), nullable=False, default="")
-    po_datetime = Column(DateTime, nullable=False, default=datetime.now())
+    mb_id = Column(String(20), ForeignKey(Member.mb_id), nullable=False, default="")
+    po_datetime = Column(DateTime, nullable=False, default=func.now())
     po_content = Column(String(255), nullable=False, default="")
     po_point = Column(Integer, nullable=False, default=0)
     po_use_point = Column(Integer, nullable=False, default=0)
     po_expired = Column(Integer, nullable=False, default=0)
-    po_expire_date = Column(Date, nullable=False, default=datetime.now())
+    po_expire_date = Column(Date, nullable=False, default=datetime(1, 1, 1, 0, 0, 0))
     po_mb_point = Column(Integer, nullable=False, default=0)
     po_rel_table = Column(String(20), nullable=False, default="")
     po_rel_id = Column(String(20), nullable=False, default="")
     po_rel_action = Column(String(100), nullable=False, default="")
 
-    member: Mapped["Member"] = relationship("Member", back_populates="points", lazy="joined")
+    # 연관관계
+    member: Mapped["Member"] = relationship("Member", back_populates="points")
 
 
 class Memo(Base):
@@ -691,25 +698,28 @@ class Memo(Base):
     __tablename__ = DB_TABLE_PREFIX + "memo"
 
     me_id = Column(Integer, primary_key=True, autoincrement=True)
-    me_recv_mb_id = Column(String(20), ForeignKey(DB_TABLE_PREFIX + "member.mb_id"), nullable=False, default="")
-    me_send_mb_id = Column(String(20), ForeignKey(DB_TABLE_PREFIX + "member.mb_id"), nullable=False, default="")
-    me_send_datetime = Column(DateTime, nullable=False, default=datetime.now())
+    me_recv_mb_id = Column(String(20), ForeignKey(Member.mb_id), nullable=False, default="")
+    me_send_mb_id = Column(String(20), ForeignKey(Member.mb_id), nullable=False, default="")
+    me_send_datetime = Column(DateTime, nullable=False, default=func.now())
     me_read_datetime = Column(DateTime, nullable=False, default=datetime(1, 1, 1, 0, 0, 0))
     me_memo = Column(Text, nullable=False)
     me_send_id = Column(Integer, nullable=False, default=0)
     me_type = Column(Enum("send", "recv", name="me_type"), nullable=False, default="recv")
     me_send_ip = Column(String(100), nullable=False, default="")
 
-    # 종속관계
+    # 연관관계
     recv_member: Mapped["Member"] = relationship("Member", back_populates="recv_memos", foreign_keys=[me_recv_mb_id])
     send_member: Mapped["Member"] = relationship("Member", back_populates="send_memos", foreign_keys=[me_send_mb_id])
+
+    __mapper_args__ = {
+        'confirm_deleted_rows': False
+    }
 
 
 class Popular(Base):
     """
     인기검색어 테이블
     """
-
     __tablename__ = DB_TABLE_PREFIX + "popular"
 
     pp_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -722,17 +732,22 @@ class Popular(Base):
 
 
 class Auth(Base):
+    """
+    관리자페이지 권한 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "auth"
 
-    mb_id = Column(String(20), ForeignKey(DB_TABLE_PREFIX + "member.mb_id"), primary_key=True, nullable=False, default="")
+    mb_id = Column(String(20), ForeignKey(Member.mb_id), primary_key=True, nullable=False, default="")
     au_menu = Column(String(20), primary_key=True, nullable=False, default="")
     au_auth = Column(String(255), nullable=False, default="")
 
     member: Mapped["Member"] = relationship("Member", back_populates="auths")
 
 
-
 class Poll(Base):
+    """
+    설문조사 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "poll"
 
     po_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -758,7 +773,7 @@ class Poll(Base):
     po_etc = Column(String(255), nullable=False, default='')
     po_level = Column(Integer, nullable=False, default=0)
     po_point = Column(Integer, nullable=False, default=0)
-    po_date = Column(Date, nullable=False, default=datetime.now())
+    po_date = Column(Date, nullable=False, default=func.now())
     po_ips = Column(Text, nullable=False, default='')
     mb_ids = Column(Text, nullable=False, default='')
     po_use = Column(Integer, nullable=False, default=1)
@@ -767,18 +782,24 @@ class Poll(Base):
 
 
 class PollEtc(Base):
+    """
+    설문조사 기타의견 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "poll_etc"
 
     pc_id = Column(Integer, primary_key=True, autoincrement=True)
-    po_id = Column(Integer, ForeignKey(DB_TABLE_PREFIX + "poll.po_id"), nullable=False, default=0)
+    po_id = Column(Integer, ForeignKey(Poll.po_id), nullable=False, default=0)
     mb_id = Column(String(20), nullable=False, default='')
     pc_name = Column(String(255), nullable=False, default='')
     pc_idea = Column(String(255), nullable=False, default='')
-    pc_datetime = Column(DateTime, nullable=False, default=datetime.now())
+    pc_datetime = Column(DateTime, nullable=False, default=func.now())
 
     poll: Mapped["Poll"] = relationship("Poll", back_populates="etcs")
 
 class AutoSave(Base):
+    """
+    게시글 자동저장
+    """
     __tablename__ = DB_TABLE_PREFIX + "autosave"
 
     as_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -786,10 +807,13 @@ class AutoSave(Base):
     as_uid = Column(BIGINT, nullable=False, unique=True, default=0)
     as_subject = Column(String(255), nullable=False, default="")
     as_content = Column(Text, nullable=False, default="")
-    as_datetime = Column(DateTime, nullable=False, default=datetime.now())
+    as_datetime = Column(DateTime, nullable=False, default=func.now())
 
 
 class UniqId(Base):
+    """
+    유니크아이디 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "uniqid"
 
     uq_id = Column(BIGINT, primary_key=True)
@@ -797,13 +821,16 @@ class UniqId(Base):
 
 
 class NewWin(Base):
+    """
+    레이어 팝업 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + 'new_win'
 
     nw_id = Column(Integer, primary_key=True, autoincrement=True)
     nw_division = Column(String(10), nullable=False, default='both')
     nw_device = Column(String(10), nullable=False, default='both')
-    nw_begin_time = Column(DateTime, nullable=False, default=datetime.now())
-    nw_end_time = Column(DateTime, nullable=False, default=datetime.now())
+    nw_begin_time = Column(DateTime, nullable=False, default=func.now())
+    nw_end_time = Column(DateTime, nullable=False, default=func.now())
     nw_disable_hours = Column(Integer, nullable=False, default=0)
     nw_left = Column(Integer, nullable=False, default=0)
     nw_top = Column(Integer, nullable=False, default=0)
@@ -812,31 +839,33 @@ class NewWin(Base):
     nw_subject = Column(Text, nullable=False)
     nw_content = Column(Text, nullable=False)
     nw_content_html = Column(Integer, nullable=False, default=0)
-    
-    
-# 회원메일발송 테이블
+
+
 class Mail(Base):
+    """
+    회원메일발송 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + 'mail'
 
     ma_id = Column(Integer, primary_key=True, autoincrement=True)
     ma_subject = Column(String(255), nullable=False, default='')
     ma_content = Column(Text, nullable=False, default='')
-    ma_time = Column(DateTime, nullable=False, default=datetime.now())
+    ma_time = Column(DateTime, nullable=False, default=func.now())
     ma_ip = Column(String(255), nullable=False, default='')
     ma_last_option = Column(Text, nullable=False, default='')
-    
+
 
 class BoardNew(Base):
     """
     최신 게시물 테이블
     """
     __tablename__ = DB_TABLE_PREFIX + 'board_new'
-    
+
     bn_id = Column(Integer, primary_key=True, autoincrement=True)
-    bo_table = Column(String(20), ForeignKey(DB_TABLE_PREFIX + "board.bo_table"), nullable=False, default='')
+    bo_table = Column(String(20), ForeignKey(Board.bo_table), nullable=False, default='')
     wr_id = Column(Integer, nullable=False, default=0)
     wr_parent = Column(Integer, nullable=False, default=0)
-    bn_datetime = Column(DateTime, nullable=False, default=datetime.now())
+    bn_datetime = Column(DateTime, nullable=False, default=func.now())
     mb_id = Column(String(20), nullable=False, default='')
 
     board: Mapped["Board"] = relationship("Board", back_populates="board_news")
@@ -849,10 +878,10 @@ class Scrap(Base):
     __tablename__ = DB_TABLE_PREFIX + 'scrap'
 
     ms_id = Column(Integer, primary_key=True, autoincrement=True)
-    mb_id = Column(String(20), ForeignKey(DB_TABLE_PREFIX + "member.mb_id"), nullable=False, default='')
-    bo_table = Column(String(20), ForeignKey(DB_TABLE_PREFIX + "board.bo_table"), nullable=False, default='')
+    mb_id = Column(String(20), ForeignKey(Member.mb_id), nullable=False, default='')
+    bo_table = Column(String(20), ForeignKey(Board.bo_table), nullable=False, default='')
     wr_id = Column(Integer, nullable=False, default=0)
-    ms_datetime = Column(DateTime, nullable=False, default=datetime.now())
+    ms_datetime = Column(DateTime, nullable=False, default=func.now())
 
     board: Mapped["Board"] = relationship("Board", back_populates="scraps")
     member: Mapped["Member"] = relationship("Member", back_populates="scraps")
@@ -870,7 +899,7 @@ class BoardGood(Base):
     wr_id = Column(Integer, nullable=False, default=0)
     mb_id = Column(String(20), nullable=False, default='')
     bg_flag = Column(String(255), nullable=False, default='')
-    bg_datetime = Column(DateTime, nullable=False, default=datetime.now())
+    bg_datetime = Column(DateTime, nullable=False, default=func.now())
 
 
 class BoardFile(Base):
@@ -893,14 +922,17 @@ class BoardFile(Base):
     bf_width = Column(Integer, nullable=False, default=0)
     bf_height = Column(Integer, nullable=False, default=0)
     bf_type = Column(Integer, nullable=False, default=0)
-    bf_datetime = Column(DateTime, nullable=False, default=datetime.now())    
-    
+    bf_datetime = Column(DateTime, nullable=False, default=func.now())
+
 
 class MemberSocialProfiles(Base):
+    """
+    회원 소셜 프로필 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "member_social_profiles"
 
     mp_no = Column(Integer, primary_key=True, autoincrement=True)
-    mb_id = Column(String(255), ForeignKey(DB_TABLE_PREFIX + "member.mb_id"), nullable=False, default="")
+    mb_id = Column(String(255), ForeignKey(Member.mb_id), nullable=False, default="")
     provider = Column(String(50), nullable=False, default="")
     object_sha = Column(String(45), nullable=False, default="")
     identifier = Column(String(255), nullable=False, default="")
@@ -915,12 +947,14 @@ class MemberSocialProfiles(Base):
 
 
 class Login(Base):
-    """현재 로그인 및 접속자 테이블"""
+    """
+    현재 로그인 및 접속자 테이블
+    """
     __tablename__ = DB_TABLE_PREFIX + "login"
 
     lo_id = Column(Integer, primary_key=True, autoincrement=True)  # 새로 추가된 기본키
     lo_ip = Column(String(100), nullable=False, default='')
     mb_id = Column(String(20), nullable=False, default='')
-    lo_datetime = Column(DateTime, nullable=False, default=datetime(1, 1, 1, 0, 0, 0))
+    lo_datetime = Column(DateTime, nullable=False, default=func.now())
     lo_location = Column(Text, nullable=False)
     lo_url = Column(Text, nullable=False)
